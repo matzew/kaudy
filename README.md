@@ -97,6 +97,54 @@ When mounted, skills are symlinked into `$HOME/.claude/skills/` before Claude st
 kaudy run --mode kubernetes --dry-run -s quay.io/matzew/agent-skills | kubectl apply -f -
 ```
 
+## Testing with kind
+
+You can run kaudy in a local [kind](https://kind.sigs.k8s.io/) cluster for testing.
+
+### Prerequisites
+
+- [kind](https://kind.sigs.k8s.io/) installed
+- `podman` available (used as the container engine and kind provider on Linux)
+- `ANTHROPIC_API_KEY` environment variable set
+
+### Create the cluster
+
+```bash
+./scripts/00-kind-setup.sh
+```
+
+This creates a kind cluster using podman, waits for kube-system pods, and patches CoreDNS to use `8.8.8.8`.
+
+### Build and deploy
+
+```bash
+export ANTHROPIC_API_KEY=<your-key>
+./scripts/01-deploy-kaudy.sh
+```
+
+This builds the container image, loads it into kind, creates a secret with your API key, and deploys a kaudy pod.
+
+### Interact with the pod
+
+```bash
+kubectl get pods -l app=kaudy
+kubectl exec -it kaudy -- claude --dangerously-skip-permissions
+```
+
+### Cleanup
+
+```bash
+kind delete cluster
+```
+
+## Pushing the Container Image
+
+```bash
+make push
+```
+
+This builds the image (via the `container` target) and pushes it to the registry configured in `IMAGE` (default `quay.io/matzew/kaudy:latest`).
+
 ## License
 
 Apache-2.0

@@ -1,6 +1,6 @@
 IMAGE ?= quay.io/matzew/kaudy:latest
 
-.PHONY: build install container test clean
+.PHONY: build install container push test clean
 
 build:
 	go build -o kaudy ./cmd/kaudy/
@@ -10,6 +10,9 @@ install:
 
 container:
 	podman build -t $(IMAGE) .
+
+push: container
+	podman push $(IMAGE)
 
 test:
 	go test ./...
