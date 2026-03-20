@@ -55,6 +55,14 @@ model_list:
       model: openai/${LITELLM_MODEL_NAME}
       api_base: os.environ/LITELLM_API_BASE
       api_key: os.environ/LITELLM_API_KEY
+
+litellm_settings:
+  master_key: sk-litellm
+  use_chat_completions_url_for_anthropic_messages: true
+  drop_params: true
+
+router_settings:
+  disable_cooldowns: true
 YAML
 )"
 
@@ -79,6 +87,14 @@ spec:
       value: "sk-litellm"
     - name: ANTHROPIC_API_KEY
       value: ""
+    - name: ANTHROPIC_CUSTOM_MODEL_OPTION
+      value: "${LITELLM_MODEL_NAME}"
+    - name: CLAUDE_CODE_DISABLE_ADAPTIVE_THINKING
+      value: "1"
+    - name: CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS
+      value: "1"
+    - name: MAX_THINKING_TOKENS
+      value: "0"
     workingDir: /workspace
     volumeMounts:
     - name: workspace

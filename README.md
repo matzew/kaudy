@@ -137,7 +137,13 @@ You can override the model name with `LITELLM_MODEL_NAME` (default: `mistral-sma
 
 ```bash
 kubectl get pods -l app=kaudy
-kubectl exec -it kaudy -- claude --dangerously-skip-permissions --model mistral-small-24b-w8a8
+kubectl exec -it kaudy -- claude --dangerously-skip-permissions --model ${LITELLM_MODEL_NAME:-mistral-small-24b-w8a8}
+```
+
+To troubleshoot, enable debug logging:
+
+```bash
+kubectl exec -it kaudy -- claude -d api --dangerously-skip-permissions --model ${LITELLM_MODEL_NAME:-mistral-small-24b-w8a8}
 ```
 
 ### Cleanup
