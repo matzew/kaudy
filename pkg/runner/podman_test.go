@@ -1,4 +1,4 @@
-package kaudy
+package runner
 
 import (
 	"strings"

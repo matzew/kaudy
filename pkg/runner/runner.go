@@ -1,4 +1,15 @@
-package kaudy
+package runner
+
+// RunOptions holds all flags for the run subcommand.
+type RunOptions struct {
+	SkillImages []string
+	Mode        string
+	Image       string
+	Workdir     string
+	DryRun      bool
+	Rebuild     bool
+	ClaudeArgs  []string
+}
 
 // Runner builds and executes a container command for running Claude Code.
 type Runner interface {

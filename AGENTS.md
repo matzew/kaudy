@@ -16,8 +16,13 @@ make container # podman build -t quay.io/matzew/kaudy:latest .
 
 ## Architecture
 
-- `Runner` interface in `container.go` with `PodmanRunner` and `KubernetesRunner` implementations
-- `RunOptions` struct holds all CLI flags
+- `pkg/runner/runner.go`: `Runner` interface, `RunOptions`, `NewRunner` factory, shared config
+- `pkg/runner/podman.go`: `PodmanRunner` implementation
+- `pkg/runner/kubernetes.go`: `KubernetesRunner` implementation
+- `pkg/skills/skills.go`: `SkillSymlinkScript` helper
+- `pkg/cli/root.go`: Cobra command wiring
+- `cmd/kaudy/main.go`: entrypoint
+- Dependency DAG (no cycles): `main → cli → runner → skills`
 - Skill images are OCI images mounted via `--mount type=image` (podman) or init containers (k8s)
 - `syscall.Exec` replaces the Go process with podman for clean TTY/signal handling
 
