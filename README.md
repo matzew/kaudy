@@ -105,7 +105,8 @@ You can run kaudy in a local [kind](https://kind.sigs.k8s.io/) cluster for testi
 
 - [kind](https://kind.sigs.k8s.io/) installed
 - `podman` available (used as the container engine and kind provider on Linux)
-- `ANTHROPIC_API_KEY` environment variable set
+- `LITELLM_API_BASE` — base URL of your OpenAI-compatible model endpoint
+- `LITELLM_API_KEY` — API key for the model endpoint
 
 ### Create the cluster
 
@@ -118,17 +119,25 @@ This creates a kind cluster using podman, waits for kube-system pods, and patche
 ### Build and deploy
 
 ```bash
-export ANTHROPIC_API_KEY=<your-key>
+export LITELLM_API_BASE='https://your-model-endpoint/v1'
+export LITELLM_API_KEY='your-model-api-key'
 ./scripts/01-deploy-kaudy.sh
 ```
 
-This builds the container image, loads it into kind, creates a secret with your API key, and deploys a kaudy pod.
+This deploys a pod with two containers:
+
+- **kaudy** — Claude Code, configured to talk to LiteLLM at `http://localhost:4000`
+- **litellm** — sidecar proxy that translates Anthropic Messages API to OpenAI Chat Completions API and forwards requests to your model endpoint
+
+The model endpoint URL and API key are stored in a Kubernetes secret (`litellm-env`), not in the ConfigMap.
+
+You can override the model name with `LITELLM_MODEL_NAME` (default: `mistral-small-24b-w8a8`).
 
 ### Interact with the pod
 
 ```bash
 kubectl get pods -l app=kaudy
-kubectl exec -it kaudy -- claude --dangerously-skip-permissions
+kubectl exec -it kaudy -- claude --dangerously-skip-permissions --model mistral-small-24b-w8a8
 ```
 
 ### Cleanup
