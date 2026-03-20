@@ -1,10 +1,12 @@
-package kaudy
+package runner
 
 import (
 	"fmt"
 	"os"
 	"strings"
 	"text/template"
+
+	"github.com/matzew/kaudy/pkg/skills"
 )
 
 // KubernetesRunner implements Runner by rendering a Pod YAML.
@@ -59,7 +61,7 @@ func (r *KubernetesRunner) Run(opts *RunOptions) error {
 
 	command := `"claude", "--dangerously-skip-permissions"`
 	if len(opts.SkillImages) > 0 {
-		script := SkillSymlinkScript(opts.ClaudeArgs)
+		script := skills.SkillSymlinkScript(opts.ClaudeArgs)
 		command = fmt.Sprintf(`"bash", "-c", %q`, script)
 	} else {
 		for _, a := range opts.ClaudeArgs {

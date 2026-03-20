@@ -1,24 +1,14 @@
-package kaudy
+package cli
 
 import (
 	"fmt"
 	"os"
 
+	"github.com/matzew/kaudy/pkg/runner"
 	"github.com/spf13/cobra"
 )
 
 const defaultImage = "quay.io/matzew/kaudy:latest"
-
-// RunOptions holds all flags for the run subcommand.
-type RunOptions struct {
-	SkillImages []string
-	Mode        string
-	Image       string
-	Workdir     string
-	DryRun      bool
-	Rebuild     bool
-	ClaudeArgs  []string
-}
 
 // NewRootCommand creates the top-level cobra command with the "run" subcommand.
 func NewRootCommand() *cobra.Command {
@@ -32,7 +22,7 @@ func NewRootCommand() *cobra.Command {
 }
 
 func newRunCommand() *cobra.Command {
-	opts := &RunOptions{}
+	opts := &runner.RunOptions{}
 
 	cmd := &cobra.Command{
 		Use:   "run [flags] [-- claude-args...]",
@@ -49,8 +39,8 @@ func newRunCommand() *cobra.Command {
 				opts.Workdir = wd
 			}
 
-			runner := NewRunner(opts.Mode)
-			return runner.Run(opts)
+			r := runner.NewRunner(opts.Mode)
+			return r.Run(opts)
 		},
 	}
 

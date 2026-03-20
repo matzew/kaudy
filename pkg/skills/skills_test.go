@@ -1,4 +1,4 @@
-package kaudy
+package skills
 
 import (
 	"strings"

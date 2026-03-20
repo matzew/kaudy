@@ -1,4 +1,4 @@
-package kaudy
+package runner
 
 import (
 	"bytes"
@@ -14,8 +14,8 @@ func TestKubernetesRunnerDryRun(t *testing.T) {
 	r, w, _ := os.Pipe()
 	os.Stdout = w
 
-	runner := &KubernetesRunner{}
-	err := runner.Run(&RunOptions{
+	kr := &KubernetesRunner{}
+	err := kr.Run(&RunOptions{
 		Image:       "quay.io/matzew/kaudy:latest",
 		SkillImages: []string{"quay.io/matzew/agent-skills"},
 		DryRun:      true,
@@ -44,8 +44,8 @@ func TestKubernetesRunnerDryRun(t *testing.T) {
 }
 
 func TestKubernetesRunnerRequiresDryRun(t *testing.T) {
-	runner := &KubernetesRunner{}
-	err := runner.Run(&RunOptions{
+	kr := &KubernetesRunner{}
+	err := kr.Run(&RunOptions{
 		Image:  "quay.io/matzew/kaudy:latest",
 		DryRun: false,
 	})

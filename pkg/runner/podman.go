@@ -1,4 +1,4 @@
-package kaudy
+package runner
 
 import (
 	"fmt"
@@ -9,6 +9,8 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/matzew/kaudy/pkg/skills"
 )
 
 // PodmanRunner implements Runner using podman.
@@ -87,7 +89,7 @@ func (r *PodmanRunner) Run(opts *RunOptions) error {
 
 	// Entrypoint: if skills present, use bash -c to symlink then exec claude
 	if len(opts.SkillImages) > 0 {
-		args = append(args, "bash", "-c", SkillSymlinkScript(opts.ClaudeArgs))
+		args = append(args, "bash", "-c", skills.SkillSymlinkScript(opts.ClaudeArgs))
 	} else {
 		args = append(args, "claude", "--dangerously-skip-permissions")
 		args = append(args, opts.ClaudeArgs...)
