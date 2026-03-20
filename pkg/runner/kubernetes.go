@@ -19,14 +19,7 @@ metadata:
   name: kaudy
   labels:
     app: kaudy
-spec:{{if .SkillImages}}
-  initContainers:{{range $i, $img := .SkillImages}}
-  - name: skill-{{$i}}
-    image: {{$img}}
-    command: ["cp", "-r", "/skills/.", "/opt/skills/"]
-    volumeMounts:
-    - name: skills
-      mountPath: /opt/skills{{end}}{{end}}
+spec:
   containers:
   - name: claude
     image: {{.Image}}
@@ -37,14 +30,16 @@ spec:{{if .SkillImages}}
       value: ""{{end}}
     volumeMounts:
     - name: workspace
-      mountPath: /workspace{{if .SkillImages}}
-    - name: skills
-      mountPath: /opt/skills{{end}}
+      mountPath: /workspace{{range $i, $img := .SkillImages}}
+    - name: skill-{{$i}}
+      mountPath: /opt/skills-{{$i}}{{end}}
   volumes:
   - name: workspace
-    emptyDir: {}{{if .SkillImages}}
-  - name: skills
-    emptyDir: {}{{end}}
+    emptyDir: {}{{range $i, $img := .SkillImages}}
+  - name: skill-{{$i}}
+    image:
+      reference: {{$img}}
+      pullPolicy: IfNotPresent{{end}}
 `
 
 type podTemplateData struct {

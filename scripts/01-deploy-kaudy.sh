@@ -20,6 +20,7 @@ function header_text {
 }
 
 IMAGE=${IMAGE:-"quay.io/matzew/kaudy:latest"}
+SKILL_IMAGE=${SKILL_IMAGE:-"quay.io/matzew/agent-skills"}
 LITELLM_MODEL_NAME=${LITELLM_MODEL_NAME:-"mistral-small-24b-w8a8"}
 
 header_text "Building kaudy container image"
@@ -28,9 +29,14 @@ podman build -t "${IMAGE}" .
 header_text "Loading image into kind"
 kind load docker-image "${IMAGE}"
 
-if [ -z "${LITELLM_API_BASE}" ]; then
-    echo "Error: LITELLM_API_BASE environment variable is not set"
-    echo "  export LITELLM_API_BASE='https://your-model-endpoint/v1'"
+if [ -n "${SKILL_IMAGE}" ]; then
+  header_text "Loading skill image into kind"
+  kind load docker-image "${SKILL_IMAGE}"
+fi
+
+if [ -z "${LITELLM_BASE_URL}" ]; then
+    echo "Error: LITELLM_BASE_URL environment variable is not set"
+    echo "  export LITELLM_BASE_URL='https://your-model-endpoint/v1'"
     exit 1
 fi
 
@@ -43,7 +49,7 @@ fi
 header_text "Creating litellm-env secret"
 kubectl delete secret litellm-env --ignore-not-found
 kubectl create secret generic litellm-env \
-  --from-literal=LITELLM_API_BASE="${LITELLM_API_BASE}" \
+  --from-literal=LITELLM_BASE_URL="${LITELLM_BASE_URL}" \
   --from-literal=LITELLM_API_KEY="${LITELLM_API_KEY}"
 
 header_text "Creating litellm config"
@@ -53,7 +59,7 @@ model_list:
   - model_name: ${LITELLM_MODEL_NAME}
     litellm_params:
       model: openai/${LITELLM_MODEL_NAME}
-      api_base: os.environ/LITELLM_API_BASE
+      api_base: os.environ/LITELLM_BASE_URL
       api_key: os.environ/LITELLM_API_KEY
 
 litellm_settings:
@@ -80,6 +86,14 @@ spec:
   - name: kaudy
     image: ${IMAGE}
     imagePullPolicy: Never
+    command: ["bash", "-c"]
+    args:
+    - |
+      mkdir -p \$HOME/.claude/skills
+      for d in /opt/skills-*/skills/*/; do
+        ln -sfn "\$d" "\$HOME/.claude/skills/\$(basename "\$d")"
+      done
+      exec claude --dangerously-skip-permissions
     env:
     - name: ANTHROPIC_BASE_URL
       value: "http://localhost:4000"
@@ -99,6 +113,8 @@ spec:
     volumeMounts:
     - name: workspace
       mountPath: /workspace
+    - name: skills
+      mountPath: /opt/skills-0
     stdin: true
     tty: true
   - name: litellm
@@ -116,6 +132,10 @@ spec:
   volumes:
   - name: workspace
     emptyDir: {}
+  - name: skills
+    image:
+      reference: ${SKILL_IMAGE}
+      pullPolicy: IfNotPresent
   - name: litellm-config
     configMap:
       name: litellm-config
