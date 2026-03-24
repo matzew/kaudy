@@ -21,6 +21,7 @@ function header_text {
 
 IMAGE=${IMAGE:-"quay.io/matzew/kaudy:latest"}
 SKILL_IMAGE=${SKILL_IMAGE:-"quay.io/matzew/agent-skills"}
+LITELLM_IMAGE=${LITELLM_IMAGE:-"ghcr.io/berriai/litellm@sha256:b959a1816fa454a14d2842242d0fa1cd0d39f96fc94d3a1f4e1de4e48e2398c6"}  # v1.82.3-stable, 2026-03-16
 LITELLM_MODEL_NAME=${LITELLM_MODEL_NAME:-"mistral-small-24b-w8a8"}
 
 header_text "Building kaudy container image"
@@ -118,7 +119,7 @@ spec:
     stdin: true
     tty: true
   - name: litellm
-    image: ghcr.io/berriai/litellm:main-latest
+    image: ${LITELLM_IMAGE}
     args: ["--config", "/etc/litellm/config.yaml", "--port", "4000"]
     ports:
     - containerPort: 4000
