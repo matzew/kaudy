@@ -38,8 +38,14 @@ func TestKubernetesRunnerDryRun(t *testing.T) {
 	if !strings.Contains(yaml, "quay.io/matzew/agent-skills") {
 		t.Error("output should contain skill image")
 	}
-	if !strings.Contains(yaml, "initContainers") {
-		t.Error("output should contain initContainers when skills are present")
+	if !strings.Contains(yaml, "image:\n      reference: quay.io/matzew/agent-skills") {
+		t.Error("output should contain image volume source with skill image reference")
+	}
+	if !strings.Contains(yaml, "mountPath: /opt/skills-0") {
+		t.Error("output should mount skill image at /opt/skills-0")
+	}
+	if strings.Contains(yaml, "initContainers") {
+		t.Error("output should not use initContainers (uses KEP-4639 OCI VolumeSource instead)")
 	}
 }
 
