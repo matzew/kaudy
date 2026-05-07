@@ -26,27 +26,41 @@ spec:
     workingDir: /workspace
     command: [{{.Command}}]
     env:{{range .EnvVars}}
-    - name: {{.}}
-      value: ""{{end}}
+    - name: {{.Name}}
+      value: "{{.Value}}"{{end}}
     volumeMounts:
     - name: workspace
-      mountPath: /workspace{{range $i, $img := .SkillImages}}
+      mountPath: /workspace{{if .VertexAuth}}
+    - name: vertex-credentials
+      mountPath: /var/run/secrets/gcloud
+      readOnly: true{{end}}{{range $i, $img := .SkillImages}}
     - name: skill-{{$i}}
       mountPath: /opt/skills-{{$i}}{{end}}
+    stdin: true
+    tty: true
   volumes:
   - name: workspace
-    emptyDir: {}{{range $i, $img := .SkillImages}}
+    emptyDir: {}{{if .VertexAuth}}
+  - name: vertex-credentials
+    secret:
+      secretName: vertex-credentials{{end}}{{range $i, $img := .SkillImages}}
   - name: skill-{{$i}}
     image:
       reference: {{$img}}
       pullPolicy: IfNotPresent{{end}}
 `
 
+type envVar struct {
+	Name  string
+	Value string
+}
+
 type podTemplateData struct {
 	Image       string
 	SkillImages []string
-	EnvVars     []string
+	EnvVars     []envVar
 	Command     string
+	VertexAuth  bool
 }
 
 func (r *KubernetesRunner) Run(opts *RunOptions) error {
@@ -64,11 +78,23 @@ func (r *KubernetesRunner) Run(opts *RunOptions) error {
 		}
 	}
 
+	vertexAuth := os.Getenv("CLAUDE_CODE_USE_VERTEX") == "1"
+
+	var envVars []envVar
+	for _, name := range PassthroughEnvVars {
+		ev := envVar{Name: name}
+		if vertexAuth && name == "GOOGLE_APPLICATION_CREDENTIALS" {
+			ev.Value = "/var/run/secrets/gcloud/service-account.json"
+		}
+		envVars = append(envVars, ev)
+	}
+
 	data := podTemplateData{
 		Image:       opts.Image,
 		SkillImages: opts.SkillImages,
-		EnvVars:     PassthroughEnvVars,
+		EnvVars:     envVars,
 		Command:     command,
+		VertexAuth:  vertexAuth,
 	}
 
 	tmpl, err := template.New("pod").Parse(podTemplate)
