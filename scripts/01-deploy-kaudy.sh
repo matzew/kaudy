@@ -21,8 +21,36 @@ function header_text {
 
 IMAGE=${IMAGE:-"quay.io/matzew/kaudy:latest"}
 SKILL_IMAGE=${SKILL_IMAGE:-"quay.io/matzew/agent-skills"}
-LITELLM_IMAGE=${LITELLM_IMAGE:-"ghcr.io/berriai/litellm@sha256:b959a1816fa454a14d2842242d0fa1cd0d39f96fc94d3a1f4e1de4e48e2398c6"}  # v1.82.3-stable, 2026-03-16
-LITELLM_MODEL_NAME=${LITELLM_MODEL_NAME:-"mistral-small-24b-w8a8"}
+CLOUD_ML_REGION=${CLOUD_ML_REGION:-"us-east5"}
+
+# Vertex AI project is required
+if [ -z "${ANTHROPIC_VERTEX_PROJECT_ID}" ]; then
+    echo "Error: ANTHROPIC_VERTEX_PROJECT_ID environment variable is not set"
+    echo "  export ANTHROPIC_VERTEX_PROJECT_ID='your-gcp-project-id'"
+    exit 1
+fi
+
+# Resolve GCP credentials: prefer explicit SA key file, fall back to ADC
+CREDENTIALS_FILE=""
+if [ -n "${VERTEX_SA_KEY_FILE}" ]; then
+    if [ ! -f "${VERTEX_SA_KEY_FILE}" ]; then
+        echo "Error: VERTEX_SA_KEY_FILE points to a file that does not exist: ${VERTEX_SA_KEY_FILE}"
+        exit 1
+    fi
+    CREDENTIALS_FILE="${VERTEX_SA_KEY_FILE}"
+else
+    ADC_FILE="${HOME}/.config/gcloud/application_default_credentials.json"
+    if [ -f "${ADC_FILE}" ]; then
+        CREDENTIALS_FILE="${ADC_FILE}"
+        echo "Using application default credentials from ${ADC_FILE}"
+    else
+        echo "Error: No GCP credentials found."
+        echo "  Either set VERTEX_SA_KEY_FILE to a service account key JSON file:"
+        echo "    export VERTEX_SA_KEY_FILE='/path/to/sa-key.json'"
+        echo "  Or run 'gcloud auth application-default login' first."
+        exit 1
+    fi
+fi
 
 header_text "Building kaudy container image"
 podman build -t "${IMAGE}" .
@@ -35,43 +63,10 @@ if [ -n "${SKILL_IMAGE}" ]; then
   kind load docker-image "${SKILL_IMAGE}"
 fi
 
-if [ -z "${LITELLM_BASE_URL}" ]; then
-    echo "Error: LITELLM_BASE_URL environment variable is not set"
-    echo "  export LITELLM_BASE_URL='https://your-model-endpoint/v1'"
-    exit 1
-fi
-
-if [ -z "${LITELLM_API_KEY}" ]; then
-    echo "Error: LITELLM_API_KEY environment variable is not set"
-    echo "  export LITELLM_API_KEY='your-api-key'"
-    exit 1
-fi
-
-header_text "Creating litellm-env secret"
-kubectl delete secret litellm-env --ignore-not-found
-kubectl create secret generic litellm-env \
-  --from-literal=LITELLM_BASE_URL="${LITELLM_BASE_URL}" \
-  --from-literal=LITELLM_API_KEY="${LITELLM_API_KEY}"
-
-header_text "Creating litellm config"
-kubectl delete configmap litellm-config --ignore-not-found
-kubectl create configmap litellm-config --from-literal=config.yaml="$(cat <<YAML
-model_list:
-  - model_name: ${LITELLM_MODEL_NAME}
-    litellm_params:
-      model: openai/${LITELLM_MODEL_NAME}
-      api_base: os.environ/LITELLM_BASE_URL
-      api_key: os.environ/LITELLM_API_KEY
-
-litellm_settings:
-  master_key: sk-litellm
-  use_chat_completions_url_for_anthropic_messages: true
-  drop_params: true
-
-router_settings:
-  disable_cooldowns: true
-YAML
-)"
+header_text "Creating vertex-credentials secret"
+kubectl delete secret vertex-credentials --ignore-not-found
+kubectl create secret generic vertex-credentials \
+  --from-file=service-account.json="${CREDENTIALS_FILE}"
 
 header_text "Deploying kaudy pod"
 kubectl delete pod kaudy --ignore-not-found --wait=true 2>/dev/null || true
@@ -96,50 +91,35 @@ spec:
       done
       exec claude --dangerously-skip-permissions
     env:
-    - name: ANTHROPIC_BASE_URL
-      value: "http://localhost:4000"
-    - name: ANTHROPIC_AUTH_TOKEN
-      value: "sk-litellm"
-    - name: ANTHROPIC_API_KEY
-      value: ""
-    - name: ANTHROPIC_CUSTOM_MODEL_OPTION
-      value: "${LITELLM_MODEL_NAME}"
-    - name: CLAUDE_CODE_DISABLE_ADAPTIVE_THINKING
+    - name: CLAUDE_CODE_USE_VERTEX
       value: "1"
-    - name: CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS
-      value: "1"
-    - name: MAX_THINKING_TOKENS
-      value: "0"
+    - name: ANTHROPIC_VERTEX_PROJECT_ID
+      value: "${ANTHROPIC_VERTEX_PROJECT_ID}"
+    - name: CLOUD_ML_REGION
+      value: "${CLOUD_ML_REGION}"
+    - name: GOOGLE_APPLICATION_CREDENTIALS
+      value: "/var/run/secrets/gcloud/service-account.json"
     workingDir: /workspace
     volumeMounts:
     - name: workspace
       mountPath: /workspace
+    - name: vertex-credentials
+      mountPath: /var/run/secrets/gcloud
+      readOnly: true
     - name: skills
       mountPath: /opt/skills-0
     stdin: true
     tty: true
-  - name: litellm
-    image: ${LITELLM_IMAGE}
-    args: ["--config", "/etc/litellm/config.yaml", "--port", "4000"]
-    ports:
-    - containerPort: 4000
-    envFrom:
-    - secretRef:
-        name: litellm-env
-    volumeMounts:
-    - name: litellm-config
-      mountPath: /etc/litellm
-      readOnly: true
   volumes:
   - name: workspace
     emptyDir: {}
+  - name: vertex-credentials
+    secret:
+      secretName: vertex-credentials
   - name: skills
     image:
       reference: ${SKILL_IMAGE}
       pullPolicy: IfNotPresent
-  - name: litellm-config
-    configMap:
-      name: litellm-config
 EOF
 
 header_text "Waiting for kaudy pod to be ready"
@@ -150,8 +130,6 @@ kubectl get pods -l app=kaudy
 
 echo ""
 echo "To exec into the kaudy pod:"
-echo "  kubectl exec -it kaudy -- claude --dangerously-skip-permissions --model ${LITELLM_MODEL_NAME}"
+echo "  kubectl exec -it kaudy -- claude --dangerously-skip-permissions"
 echo ""
-echo "The LiteLLM sidecar proxies requests to your model endpoint."
-echo "Claude Code talks to LiteLLM at http://localhost:4000 (Anthropic Messages API)."
-echo "LiteLLM forwards to your model endpoint (OpenAI Chat Completions API)."
+echo "Claude Code connects to Vertex AI (project: ${ANTHROPIC_VERTEX_PROJECT_ID}, region: ${CLOUD_ML_REGION})"
