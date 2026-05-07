@@ -91,7 +91,7 @@ When mounted, skills are symlinked into `$HOME/.claude/skills/` before Claude st
 
 ## Kubernetes Mode
 
-`--mode kubernetes` renders a Pod YAML with skill images as init containers. Currently `--dry-run` only.
+`--mode kubernetes` renders a Pod YAML with OCI volume mounts for skill images. Currently `--dry-run` only. When `CLAUDE_CODE_USE_VERTEX=1` is set, the template includes a `vertex-credentials` secret volume for GCP authentication.
 
 ```bash
 kaudy run --mode kubernetes --dry-run -s quay.io/matzew/agent-skills | kubectl apply -f -
@@ -99,14 +99,16 @@ kaudy run --mode kubernetes --dry-run -s quay.io/matzew/agent-skills | kubectl a
 
 ## Testing with kind
 
-You can run kaudy in a local [kind](https://kind.sigs.k8s.io/) cluster for testing.
+You can run kaudy in a local [kind](https://kind.sigs.k8s.io/) cluster for testing. Claude Code connects directly to Claude via Google Cloud Vertex AI.
 
 ### Prerequisites
 
 - [kind](https://kind.sigs.k8s.io/) installed
 - `podman` available (used as the container engine and kind provider on Linux)
-- `LITELLM_API_BASE` — base URL of your OpenAI-compatible model endpoint
-- `LITELLM_API_KEY` — API key for the model endpoint
+- A Google Cloud project with the Vertex AI API enabled
+- GCP credentials - one of:
+  - A service account key JSON file (`VERTEX_SA_KEY_FILE`)
+  - Application default credentials via `gcloud auth application-default login`
 
 ### Create the cluster
 
@@ -119,31 +121,31 @@ This creates a kind cluster using podman, waits for kube-system pods, and patche
 ### Build and deploy
 
 ```bash
-export LITELLM_API_BASE='https://your-model-endpoint/v1'
-export LITELLM_API_KEY='your-model-api-key'
+export ANTHROPIC_VERTEX_PROJECT_ID='your-gcp-project-id'
+export CLOUD_ML_REGION='us-east5'  # optional, defaults to us-east5
+
+# Option A: use a service account key file
+export VERTEX_SA_KEY_FILE='/path/to/sa-key.json'
+
+# Option B: use gcloud application default credentials (no extra export needed)
+# gcloud auth application-default login
+
 ./scripts/01-deploy-kaudy.sh
 ```
 
-This deploys a pod with two containers:
-
-- **kaudy** — Claude Code, configured to talk to LiteLLM at `http://localhost:4000`
-- **litellm** — sidecar proxy that translates Anthropic Messages API to OpenAI Chat Completions API and forwards requests to your model endpoint
-
-The model endpoint URL and API key are stored in a Kubernetes secret (`litellm-env`), not in the ConfigMap.
-
-You can override the model name with `LITELLM_MODEL_NAME` (default: `mistral-small-24b-w8a8`).
+This deploys a single-container pod running Claude Code configured to use Vertex AI. GCP credentials are stored in a Kubernetes secret (`vertex-credentials`) and mounted into the pod.
 
 ### Interact with the pod
 
 ```bash
 kubectl get pods -l app=kaudy
-kubectl exec -it kaudy -- claude --dangerously-skip-permissions --model ${LITELLM_MODEL_NAME:-mistral-small-24b-w8a8}
+kubectl exec -it kaudy -- claude --dangerously-skip-permissions
 ```
 
 To troubleshoot, enable debug logging:
 
 ```bash
-kubectl exec -it kaudy -- claude -d api --dangerously-skip-permissions --model ${LITELLM_MODEL_NAME:-mistral-small-24b-w8a8}
+kubectl exec -it kaudy -- claude -d api --dangerously-skip-permissions
 ```
 
 ### Cleanup
